@@ -1,11 +1,18 @@
+import sys
+
 from PyQt4 import QtCore, QtGui
 
 import zoneeditor
 import charactereditor
+import config
 
 class MainWindow(QtGui.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
+
+        self.conf = config.getDataDirectory()
+        if not self.conf:
+            sys.exit(-3)
 
         tabs = QtGui.QTabWidget()
 
