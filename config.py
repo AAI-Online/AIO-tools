@@ -1,4 +1,5 @@
 import os
+import sys
 from ConfigParser import ConfigParser
 
 from PyQt4 import QtGui
@@ -33,3 +34,8 @@ def getDataDirectory():
         return folder
 
     return f.get("General", "data_path")
+
+
+datadir = getDataDirectory()
+if not datadir:
+    sys.exit(-3)
