@@ -7,5 +7,6 @@ class CharacterEditor(QtGui.QWidget):
         layout = QtGui.QHBoxLayout(self)
 
         soon = QtGui.QLabel(text="Coming soon...")
+        soon.setAlignment(QtCore.Qt.AlignCenter)
 
         layout.addWidget(soon)
