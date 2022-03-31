@@ -25,6 +25,8 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.keysDown = set()
 
     def snapToLine(self, pos):
+        if QtCore.Qt.Key_Alt in self.keysDown: return # don't snap
+        
         radius = 4
         for obj in self.objects:
             if obj["type"] == ITEM_LINE:
@@ -41,7 +43,12 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.parent.changes = True
 
     def keyPressEvent(self, event):
-        pass
+        if not event.isAutoRepeat():
+            self.keysDown.add(event.key())
+
+    def keyReleaseEvent(self, event):
+        if not event.isAutoRepeat():
+            self.keysDown.remove(event.key())
 
     def mousePressEvent(self, event):
         pos = self.mapToScene(event.pos())
@@ -58,14 +65,13 @@ class ZoneSceneView(QtGui.QGraphicsView):
 
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())
-        if event.button() == QtCore.Qt.LeftButton:
-            if self.parent.currtool == 0: # select
-                pass
-            elif self.parent.currtool == 1: # draw line
-                if self.linePreview:
-                    pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
-                    self.snapToLine(pos)
-                    self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
+        if self.parent.currtool == 0: # select
+            pass
+        elif self.parent.currtool == 1: # draw line
+            if self.linePreview:
+                pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
+                self.snapToLine(pos)
+                self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
 
     def mouseReleaseEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
