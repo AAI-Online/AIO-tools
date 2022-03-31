@@ -23,6 +23,18 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.objects = []
         self.linePreview = None
 
+    def snapToLine(self, pos):
+        radius = 4
+        for obj in self.objects:
+            if obj["type"] == ITEM_LINE:
+                line = obj["line"].line()
+                if pos.x() >= line.x1()-radius and pos.x() <= line.x1()+radius and pos.y() >= line.y1()-radius and pos.y() <= line.y1()+radius:
+                    pos.setX(line.x1())
+                    pos.setY(line.y1())
+                elif pos.x() >= line.x2()-radius and pos.x() <= line.x2()+radius and pos.y() >= line.y2()-radius and pos.y() <= line.y2()+radius:
+                    pos.setX(line.x2())
+                    pos.setY(line.y2())
+
     def addLine(self, line):
         self.objects.append({"type": ITEM_LINE, "line": line, "angle": line.line().angle(), "rect": None})
         self.parent.changes = True
@@ -45,7 +57,9 @@ class ZoneSceneView(QtGui.QGraphicsView):
             pass
         elif self.parent.currtool == 1: # draw line
             if self.linePreview:
-                self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), round(pos.x()), round(pos.y()))
+                pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
+                self.snapToLine(pos)
+                self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
 
     def mouseReleaseEvent(self, event):
         if self.parent.currtool == 0: # select
