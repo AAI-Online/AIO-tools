@@ -22,6 +22,7 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.mousePrev = False
         self.objects = []
         self.linePreview = None
+        self.keysDown = set()
 
     def snapToLine(self, pos):
         radius = 4
@@ -39,52 +40,58 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.objects.append({"type": ITEM_LINE, "line": line, "angle": line.line().angle(), "rect": None})
         self.parent.changes = True
 
+    def keyPressEvent(self, event):
+        pass
+
     def mousePressEvent(self, event):
         pos = self.mapToScene(event.pos())
-        if self.parent.currtool == 0: # select
-            pass
-        elif self.parent.currtool == 1: # draw line
-            if self.linePreview: self.scene.removeItem(self.linePreview)
-            self.linePreview = QtGui.QGraphicsLineItem(QtCore.QLineF(round(pos.x()), round(pos.y()), round(pos.x()), round(pos.y())), scene=self.scene)
-            pen = self.linePreview.pen()
-            pen.setWidth(1)
-            pen.setCosmetic(False)
-            self.linePreview.setPen(pen)
+        if event.button() == QtCore.Qt.LeftButton:
+            if self.parent.currtool == 0: # select
+                pass
+            elif self.parent.currtool == 1: # draw line
+                if self.linePreview: self.scene.removeItem(self.linePreview)
+                self.linePreview = QtGui.QGraphicsLineItem(QtCore.QLineF(round(pos.x()), round(pos.y()), round(pos.x()), round(pos.y())), scene=self.scene)
+                pen = self.linePreview.pen()
+                pen.setWidth(1)
+                pen.setCosmetic(False)
+                self.linePreview.setPen(pen)
 
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())
-        if self.parent.currtool == 0: # select
-            pass
-        elif self.parent.currtool == 1: # draw line
-            if self.linePreview:
-                pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
-                self.snapToLine(pos)
-                self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
+        if event.button() == QtCore.Qt.LeftButton:
+            if self.parent.currtool == 0: # select
+                pass
+            elif self.parent.currtool == 1: # draw line
+                if self.linePreview:
+                    pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
+                    self.snapToLine(pos)
+                    self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
 
     def mouseReleaseEvent(self, event):
-        if self.parent.currtool == 0: # select
-            pass
-        elif self.parent.currtool == 1: # draw line
-            if self.linePreview:
-                self.addLine(self.linePreview)
-                x1 = self.linePreview.line().x1() if self.linePreview.line().x1() < self.linePreview.line().x2() else self.linePreview.line().x2()
-                x2 = self.linePreview.line().x1() if self.linePreview.line().x1() > self.linePreview.line().x2() else self.linePreview.line().x2()
-                y1 = self.linePreview.line().y1() if self.linePreview.line().y1() < self.linePreview.line().y2() else self.linePreview.line().y2()
-                y2 = self.linePreview.line().y1() if self.linePreview.line().y1() > self.linePreview.line().y2() else self.linePreview.line().y2()
-                if x1 == x2:
-                    x1 -= 1
-                    x2 += 1
-                elif y1 == y2:
-                    y1 -= 1
-                    y2 += 1
-                rect = QtGui.QGraphicsRectItem(x1, y1, x2-x1, y2-y1, scene=self.scene)
-                rect.setZValue(self.linePreview.zValue()-1)
-                pen = QtGui.QPen(QtCore.Qt.red)
-                pen.setWidth(1)
-                pen.setCosmetic(False)
-                rect.setPen(pen)
-                self.objects[-1]["rect"] = rect
-                self.linePreview = None
+        if event.button() == QtCore.Qt.LeftButton:
+            if self.parent.currtool == 0: # select
+                pass
+            elif self.parent.currtool == 1: # draw line
+                if self.linePreview:
+                    self.addLine(self.linePreview)
+                    x1 = self.linePreview.line().x1() if self.linePreview.line().x1() < self.linePreview.line().x2() else self.linePreview.line().x2()
+                    x2 = self.linePreview.line().x1() if self.linePreview.line().x1() > self.linePreview.line().x2() else self.linePreview.line().x2()
+                    y1 = self.linePreview.line().y1() if self.linePreview.line().y1() < self.linePreview.line().y2() else self.linePreview.line().y2()
+                    y2 = self.linePreview.line().y1() if self.linePreview.line().y1() > self.linePreview.line().y2() else self.linePreview.line().y2()
+                    if x1 == x2:
+                        x1 -= 1
+                        x2 += 1
+                    elif y1 == y2:
+                        y1 -= 1
+                        y2 += 1
+                    rect = QtGui.QGraphicsRectItem(x1, y1, x2-x1, y2-y1, scene=self.scene)
+                    rect.setZValue(self.linePreview.zValue()-1)
+                    pen = QtGui.QPen(QtCore.Qt.red)
+                    pen.setWidth(1)
+                    pen.setCosmetic(False)
+                    rect.setPen(pen)
+                    self.objects[-1]["rect"] = rect
+                    self.linePreview = None
 
     @QtCore.pyqtSlot()
     def zoomIn(self):
