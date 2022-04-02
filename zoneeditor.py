@@ -6,9 +6,11 @@ from PyQt4 import QtCore, QtGui
 
 import config
 
+lineRadius = 2
 ITEM_LINE = 0
 ITEM_FG = 1
 ITEM_SPAWN = 2
+ITEM_RECT = 3
 
 
 class ZoneSceneView(QtGui.QGraphicsView):
@@ -22,25 +24,53 @@ class ZoneSceneView(QtGui.QGraphicsView):
         self.mousePrev = False
         self.objects = []
         self.linePreview = None
+        self.selected = None
+        self.moveSteps = 10
         self.keysDown = set()
 
-    def snapToLine(self, pos):
+    def snapToLine(self, pos, ignore=None):
         if QtCore.Qt.Key_Alt in self.keysDown: return # don't snap
         
-        radius = 4
         for obj in self.objects:
+            if obj["obj"] == ignore: continue
+
             if obj["type"] == ITEM_LINE:
-                line = obj["line"].line()
-                if pos.x() >= line.x1()-radius and pos.x() <= line.x1()+radius and pos.y() >= line.y1()-radius and pos.y() <= line.y1()+radius:
-                    pos.setX(line.x1())
-                    pos.setY(line.y1())
-                elif pos.x() >= line.x2()-radius and pos.x() <= line.x2()+radius and pos.y() >= line.y2()-radius and pos.y() <= line.y2()+radius:
-                    pos.setX(line.x2())
-                    pos.setY(line.y2())
+                x1 = obj["obj"].x()
+                y1 = obj["obj"].y()
+                x2 = x1 + obj["obj"].line().x2()
+                y2 = y1 + obj["obj"].line().y2()
+                if pos.x() >= x1-lineRadius and pos.x() <= x1+lineRadius and pos.y() >= y1-lineRadius and pos.y() <= y1+lineRadius:
+                    pos.setX(x1)
+                    pos.setY(y1)
+                elif pos.x() >= x2-lineRadius and pos.x() <= x2+lineRadius and pos.y() >= y2-lineRadius and pos.y() <= y2+lineRadius:
+                    pos.setX(x2)
+                    pos.setY(y2)
+
+    def lineToItemPos(self, lineItem): # convert line x1,y1,x2,y2 to qgraphicsitem position & width
+        line = lineItem.line()
+        if line.x1() == 0 and line.y1() == 0: return # already done
+
+        x1 = line.x1()
+        x2 = line.x2()
+        y1 = line.y1()
+        y2 = line.y2()
+
+        lineItem.setPos(x1, y1)
+        line.setP1(QtCore.QPointF(0, 0))
+        line.setP2(QtCore.QPointF(x2-x1, y2-y1))
+        lineItem.setLine(line)
 
     def addLine(self, line):
-        self.objects.append({"type": ITEM_LINE, "line": line, "angle": line.line().angle(), "rect": None})
+        self.lineToItemPos(line)
+        self.objects.append({"type": ITEM_LINE, "obj": line, "angle": line.line().angle(), "rect": None})
         self.parent.changes = True
+
+    def deselect(self):
+        if self.selected:
+            pen = self.selected["rect"].pen()
+            pen.setColor(QtCore.Qt.red)
+            self.selected["rect"].setPen(pen)
+            self.selected = None
 
     def keyPressEvent(self, event):
         if not event.isAutoRepeat():
@@ -54,7 +84,37 @@ class ZoneSceneView(QtGui.QGraphicsView):
         pos = self.mapToScene(event.pos())
         if event.button() == QtCore.Qt.LeftButton:
             if self.parent.currtool == 0: # select
-                pass
+                self.deselect()
+
+                for obj in self.objects:
+                    if obj["type"] == ITEM_LINE:
+                        x1 = obj["obj"].x()
+                        y1 = obj["obj"].y()
+                        x2 = x1 + obj["obj"].line().x2()
+                        y2 = y1 + obj["obj"].line().y2()
+                        if pos.x() >= x1-lineRadius and pos.x() <= x1+lineRadius and pos.y() >= y1-lineRadius and pos.y() <= y1+lineRadius:
+                            pen = obj["rect"].pen()
+                            pen.setColor(QtCore.Qt.green)
+                            obj["rect"].setPen(pen)
+                            self.selected = {"moveType": ITEM_LINE, "type": obj["type"], "obj": obj["obj"], "line": obj["obj"].line(), "linePoint": 1, "rect": obj["rect"]}
+                            self.moveSteps = 10
+                            break
+                        elif pos.x() >= x2-lineRadius and pos.x() <= x2+lineRadius and pos.y() >= y2-lineRadius and pos.y() <= y2+lineRadius:
+                            pen = obj["rect"].pen()
+                            pen.setColor(QtCore.Qt.green)
+                            obj["rect"].setPen(pen)
+                            self.selected = {"moveType": ITEM_LINE, "type": obj["type"], "obj": obj["obj"], "line": obj["obj"].line(), "linePoint": 2, "rect": obj["rect"]}
+                            self.moveSteps = 10
+                            break
+
+                    if pos.x() >= obj["rect"].x() and pos.y() >= obj["rect"].y() and pos.x() <= obj["rect"].x() + obj["rect"].rect().width() and pos.y() <= obj["rect"].y() + obj["rect"].rect().height(): # ordinary object
+                        pen = obj["rect"].pen()
+                        pen.setColor(QtCore.Qt.green)
+                        obj["rect"].setPen(pen)
+                        self.selected = {"moveType": ITEM_RECT, "type": obj["type"], "obj": obj["obj"], "rect": obj["rect"]}
+                        self.moveSteps = 10
+                        break
+
             elif self.parent.currtool == 1: # draw line
                 if self.linePreview: self.scene.removeItem(self.linePreview)
                 self.linePreview = QtGui.QGraphicsLineItem(QtCore.QLineF(round(pos.x()), round(pos.y()), round(pos.x()), round(pos.y())), scene=self.scene)
@@ -65,32 +125,92 @@ class ZoneSceneView(QtGui.QGraphicsView):
 
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())
-        if self.parent.currtool == 0: # select
-            pass
-        elif self.parent.currtool == 1: # draw line
+        if self.parent.currtool == 0: # select tool
+            if self.selected:
+                if self.moveSteps > 0:
+                    self.moveSteps -= 1
+                    return
+
+                if self.selected["moveType"] == ITEM_RECT:
+                    self.selected["obj"].setPos(round(pos.x()), round(pos.y()))
+                    if self.selected["type"] == ITEM_LINE: # moving the line as well
+                        line = self.selected["obj"].line()
+
+                        # if line's p2 has a negative coordinate, align it so it's inside the rect
+                        if line.x2() < 0: self.selected["obj"].setX(self.selected["obj"].x() - line.x2())
+                        if line.y2() < 0: self.selected["obj"].setY(self.selected["obj"].y() - line.y2())
+
+                        # if line isn't diagonal, align it to be centered in the rect instead of the top
+                        if line.x1() == line.x2(): self.selected["obj"].setX(self.selected["obj"].x() + 1)
+                        if line.y1() == line.y2(): self.selected["obj"].setY(self.selected["obj"].y() + 1)
+                    self.selected["rect"].setPos(round(pos.x()), round(pos.y()))
+                elif self.selected["moveType"] == ITEM_LINE:
+                    self.snapToLine(pos, self.selected["obj"])
+                    line = self.selected["obj"].line() # copy
+                    linePoint = getattr(line, "p%d"%self.selected["linePoint"])() # get line point
+                    linePoint.setX(round(pos.x()) - self.selected["obj"].x())
+                    linePoint.setY(round(pos.y()) - self.selected["obj"].y())
+                    getattr(line, "setP%d"%self.selected["linePoint"])(linePoint) # set line point
+                    self.selected["obj"].setLine(line)
+                    
+
+        elif self.parent.currtool == 1: # draw line tool
             if self.linePreview:
                 pos = QtCore.QPointF(round(pos.x()), round(pos.y()))
                 self.snapToLine(pos)
                 self.linePreview.setLine(self.linePreview.line().x1(), self.linePreview.line().y1(), pos.x(), pos.y())
 
     def mouseReleaseEvent(self, event):
+        pos = self.mapToScene(event.pos())
         if event.button() == QtCore.Qt.LeftButton:
             if self.parent.currtool == 0: # select
-                pass
+                if self.selected and self.moveSteps <= 0:
+                    pass # add undo action
+
+                    if self.selected["moveType"] == ITEM_LINE:
+                        line = self.selected["obj"].line()
+                        x = self.selected["obj"].x()
+                        y = self.selected["obj"].y()
+                        x1 = line.x1()
+                        y1 = line.y1()
+                        x2 = line.x2()
+                        y2 = line.y2()
+                        line.setP1(QtCore.QPointF(x1 + x, y1 + y))
+                        line.setP2(QtCore.QPointF(x2 + x, y2 + y))
+                        self.selected["obj"].setPos(0, 0)
+                        self.selected["obj"].setLine(line)
+                        self.lineToItemPos(self.selected["obj"])
+
+                        x1 = min(self.selected["obj"].x(), self.selected["obj"].x() + self.selected["obj"].line().x2())
+                        x2 = max(self.selected["obj"].x(), self.selected["obj"].x() + self.selected["obj"].line().x2())
+                        y1 = min(self.selected["obj"].y(), self.selected["obj"].y() + self.selected["obj"].line().y2())
+                        y2 = max(self.selected["obj"].y(), self.selected["obj"].y() + self.selected["obj"].line().y2())
+                        if x1 == x2:
+                            x1 -= 1
+                            x2 += 1
+                        elif y1 == y2:
+                            y1 -= 1
+                            y2 += 1
+                        self.selected["rect"].setPos(x1, y1)
+                        self.selected["rect"].setRect(0, 0, x2-x1, y2-y1)
+
+                self.deselect()
+                    
             elif self.parent.currtool == 1: # draw line
                 if self.linePreview:
                     self.addLine(self.linePreview)
-                    x1 = self.linePreview.line().x1() if self.linePreview.line().x1() < self.linePreview.line().x2() else self.linePreview.line().x2()
-                    x2 = self.linePreview.line().x1() if self.linePreview.line().x1() > self.linePreview.line().x2() else self.linePreview.line().x2()
-                    y1 = self.linePreview.line().y1() if self.linePreview.line().y1() < self.linePreview.line().y2() else self.linePreview.line().y2()
-                    y2 = self.linePreview.line().y1() if self.linePreview.line().y1() > self.linePreview.line().y2() else self.linePreview.line().y2()
+                    x1 = min(self.linePreview.x(), self.linePreview.x() + self.linePreview.line().x2())
+                    x2 = max(self.linePreview.x(), self.linePreview.x() + self.linePreview.line().x2())
+                    y1 = min(self.linePreview.y(), self.linePreview.y() + self.linePreview.line().y2())
+                    y2 = max(self.linePreview.y(), self.linePreview.y() + self.linePreview.line().y2())
                     if x1 == x2:
                         x1 -= 1
                         x2 += 1
                     elif y1 == y2:
                         y1 -= 1
                         y2 += 1
-                    rect = QtGui.QGraphicsRectItem(x1, y1, x2-x1, y2-y1, scene=self.scene)
+                    rect = QtGui.QGraphicsRectItem(0, 0, x2-x1, y2-y1, scene=self.scene)
+                    rect.setPos(x1, y1)
                     rect.setZValue(self.linePreview.zValue()-1)
                     pen = QtGui.QPen(QtCore.Qt.red)
                     pen.setWidth(1)
